@@ -25,7 +25,7 @@ public class HrmSyn2Ctrip extends BaseBean {
     private String appSecurity;
     private String version;
     private String corporationID;
-    private String subAccountName = "KNHB_提前审批授权";
+    private String subAccountName;
 
     public HrmSyn2Ctrip() {
         this.appKey = getPropValue("ctripInfo", "appKey");
@@ -33,7 +33,7 @@ public class HrmSyn2Ctrip extends BaseBean {
         this.version = getPropValue("ctripInfo", "version");
         this.corporationID = getPropValue("ctripInfo", "corporationID");
         this.ticket = this.getCorpTicket.getEmployeeSyncTicket(this.appKey, this.appSecurity, this.version).getTicket();
-        //this.subAccountName = getPropValue("ctripInfo", "SubAccountName");
+        this.subAccountName = getPropValue("ctripInfo", "SubAccountName");
         writeLog("crtip params----->:appKey:" + appKey + ",appSecurity:" + appSecurity + ",version:" + version + ",corporationID:" + corporationID + ",subAccountName:" + this.subAccountName);
     }
 
