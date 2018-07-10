@@ -44,7 +44,8 @@ public class CheckBillAction extends BaseBean implements Action {
                 invoiceModel.setOwner(mainMap.get("owner"));// owner 报销人
                 invoiceModel.setFdate(invoiceUtil.GetNowDate());// fdate 报销日期
                 invoiceModel.setMoney(detailRowMap.get("money"));// money 发票金额
-                invoiceModel.setStatus("1"); // status 报销状态 1来表达创建，2来表达在途，3来表达归档
+                invoiceModel.setStatus("0"); // status 报销状态 0来表达在途,0来表达归档
+                invoiceModel.setPurpose(detailRowMap.get("purpose"));
                 invoiceModelList.add(invoiceModel);
             }
 

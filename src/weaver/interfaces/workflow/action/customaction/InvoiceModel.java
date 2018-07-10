@@ -25,9 +25,13 @@ public class InvoiceModel {
      */
     private String money;
     /**
-     * status 报销状态 1来表达创建 2来表达在途 3来表达归档
+     * status 报销状态  0来表达在途 1来表达归档
      */
     private String status;
+    /**
+     * 用途
+     */
+    private String purpose;
 
     public String getRequestId() {
         return requestId;
@@ -75,5 +79,13 @@ public class InvoiceModel {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getPurpose() {
+        return purpose;
+    }
+
+    public void setPurpose(String purpose) {
+        this.purpose = purpose;
     }
 }

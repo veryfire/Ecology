@@ -36,16 +36,16 @@ public class InvoiceUtil extends BaseBean {
         List<String> result = isExitByInvoiceNumber(invoiceModelList);
         if (result.isEmpty()) {
             for (InvoiceModel invoiceModel : invoiceModelList) {
-                String insertSql = "insert into uf_invoice(requestid,invoice_number,owner,fdate,money,status)" + "values('" +
+                String insertSql = "insert into uf_invoice(requestid,invoice_number,owner,fdate,money,status,purpose)" + "values('" +
                         invoiceModel.getRequestId() + "','" +
                         invoiceModel.getInvoice_number() + "','" +
                         invoiceModel.getOwner() + "','" +
                         invoiceModel.getFdate() + "','" +
                         invoiceModel.getMoney() + "','" +
-                        invoiceModel.getStatus() + "')";
+                        invoiceModel.getStatus() + "','" +
+                        invoiceModel.getPurpose() + "')";
                 try {
                     recordSet.executeSql(insertSql);
-
                     writeLog("data insert success,sqlstatment:" + insertSql, InvoiceUtil.class);
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -194,7 +194,7 @@ public class InvoiceUtil extends BaseBean {
     }
 
     public void updateModeFormIdInfo(int sourceId) {
-        String sql = "update uf_invoce set formmodeid='" + this.getModeId() + "',userid='1'," +
+        String sql = "update uf_invoice set formmodeid='" + this.getModeId() + "',userid='1'," +
                 " usertype='0', createdate='" + GetNowDate() + "', createtime='" + GetNowTime() + "' where id =" + sourceId;
         RecordSet recordSet = new RecordSet();
         recordSet.execute(sql);
