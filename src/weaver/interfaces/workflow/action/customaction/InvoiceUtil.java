@@ -1,16 +1,13 @@
 package weaver.interfaces.workflow.action.customaction;
 
 import weaver.conn.RecordSet;
+import weaver.conn.RecordSetTrans;
 import weaver.formmode.setup.ModeRightInfo;
 import weaver.general.BaseBean;
 import weaver.soa.workflow.request.*;
 
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Date;
+import java.util.*;
 
 /**
  * 工具类
@@ -32,7 +29,7 @@ public class InvoiceUtil extends BaseBean {
      * @return
      */
     public synchronized List<String> insertBillData(List<InvoiceModel> invoiceModelList) {
-        RecordSet recordSet = new RecordSet();//通过事务来操作
+        RecordSetTrans recordSet = new RecordSetTrans();//通过事务来操作
         List<String> result = isExitByInvoiceNumber(invoiceModelList);
         if (result.isEmpty()) {
             for (InvoiceModel invoiceModel : invoiceModelList) {
@@ -49,9 +46,11 @@ public class InvoiceUtil extends BaseBean {
                     writeLog("data insert success,sqlstatment:" + insertSql, InvoiceUtil.class);
                 } catch (Exception e) {
                     e.printStackTrace();
+                    recordSet.rollback();
                     writeLog("data insert error,data will rollback", InvoiceUtil.class);
                 }
             }
+            recordSet.commit();
             List<Integer> invoiceIds = getInvoiceIdByInvoiceNumber(invoiceModelList);
             //添加建模默认查看权限
             for (Integer integer : invoiceIds) {
@@ -133,9 +132,18 @@ public class InvoiceUtil extends BaseBean {
         if ("".equals(requestid) || requestid == null) {
             return false;
         }
-        RecordSet recordSet = new RecordSet();
-        boolean result = recordSet.execute("delete from uf_invoice where requestid = '" + requestid + "'");
-        writeLog("delete uf_invoice table data result:" + result);
+        RecordSetTrans recordSet = new RecordSetTrans();
+        boolean result = false;
+        try {
+            recordSet.executeSql("delete from uf_invoice where requestid = '" + requestid + "'");
+            if (recordSet.commit()) {
+                result = true;
+                writeLog("delete uf_invoice table data result:" + result);
+                return result;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return result;
     }
 
@@ -194,8 +202,13 @@ public class InvoiceUtil extends BaseBean {
     }
 
     public void updateModeFormIdInfo(int sourceId) {
-        String sql = "update uf_invoice set formmodeid='" + this.getModeId() + "',userid='1'," +
-                " usertype='0', createdate='" + GetNowDate() + "', createtime='" + GetNowTime() + "' where id =" + sourceId;
+        String sql = "update uf_invoice set formmodeid='" +
+                this.getModeId() +
+                "',modedatacreater='1'," +
+                " modedatacreatertype='0', " +
+                "modedatacreatedate='" + GetNowDate() + "', " +
+                "modedatacreatetime='" +
+                GetNowTime() + "' where id =" + sourceId;
         RecordSet recordSet = new RecordSet();
         recordSet.execute(sql);
     }
