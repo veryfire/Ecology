@@ -41,7 +41,8 @@ public class CtripOrder extends BaseBean {
         String ticket = orderSearchTicket.getTicket();
         Authentification authentfication = new Authentification(this.appKey, ticket);
         searchOrderRequest.setAuth(authentfication);
-        searchOrderRequest.setJourneyNo(journeyNo);// 行程号
+        // 行程号
+        searchOrderRequest.setJourneyNo(journeyNo);
         searchOrderRequest.setDateFrom(dateFrom);
         searchOrderRequest.setDateTo(dateTo);
         String postData = HttpUtil.PostData("https://ct.ctrip.com/switchapi/Order/SearchOrder", JSONObject.toJSONString(searchOrderRequest));

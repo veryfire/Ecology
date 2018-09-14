@@ -23,6 +23,34 @@ public class InvoiceUtil extends BaseBean {
     private String requestId;
 
     /**
+     * 插入发票号 invoice_number 为空的数据,不做验证
+     *
+     * @param invoiceModelListAndInvoice_numberIsNull 发票为空的实体信息
+     */
+    public void insertBillDataAndInvoiceNumberIsNull(List<InvoiceModel> invoiceModelListAndInvoice_numberIsNull) {
+        RecordSetTrans recordSet = new RecordSetTrans();//通过事务来操作
+        for (InvoiceModel invoiceModel : invoiceModelListAndInvoice_numberIsNull) {
+            String insertSql = "insert into uf_invoice(requestid,invoice_number,owner,fdate,money,status,purpose)" + "values('" +
+                    invoiceModel.getRequestId() + "','" +
+                    invoiceModel.getInvoice_number() + "','" +
+                    invoiceModel.getOwner() + "','" +
+                    invoiceModel.getFdate() + "','" +
+                    invoiceModel.getMoney() + "','" +
+                    invoiceModel.getStatus() + "','" +
+                    invoiceModel.getPurpose() + "')";
+            try {
+                recordSet.executeSql(insertSql);
+                writeLog("data insert success,sqlstatment:" + insertSql, InvoiceUtil.class);
+            } catch (Exception e) {
+                e.printStackTrace();
+                recordSet.rollback();
+                writeLog("data insert error,data will rollback", InvoiceUtil.class);
+            }
+        }
+        recordSet.commit();
+    }
+
+    /**
      * 插入数据到中间表
      *
      * @param invoiceModelList
@@ -165,11 +193,33 @@ public class InvoiceUtil extends BaseBean {
     }
 
     /**
-     * 根据requestinfo返回所有明细表集合
-     *
      * @param requestInfo
+     * @param tableIndex
      * @return
      */
+    public ArrayList<ArrayList<HashMap<String, String>>> getDetailTableDataMap(RequestInfo requestInfo, int tableIndex) {
+        ArrayList<ArrayList<HashMap<String, String>>> detailMaps = new ArrayList<ArrayList<HashMap<String, String>>>();
+        DetailTable[] detailTables = requestInfo.getDetailTableInfo().getDetailTable();
+        ArrayList<HashMap<String, String>> detailMap = new ArrayList<HashMap<String, String>>();
+        if (detailTables.length > 0) {
+            Row[] rows = detailTables[tableIndex].getRow();
+            for (int j = 0; j < rows.length; j++) {
+                HashMap<String, String> hashMap = new HashMap<String, String>();
+                Cell[] cells = rows[j].getCell();//明细表 明细行 明细列
+                for (Cell cell : cells) {
+                    String filedName = cell.getName();
+                    String fieldValue = cell.getValue();
+                    hashMap.put(filedName, fieldValue);
+                    writeLog("明细表:" + (tableIndex + 1) + " ,\t\t 明细行：" + (j + 1) + " ,\t\t 字段名：" + filedName + ",\t\t 字段值：" + fieldValue);
+                }
+                detailMap.add(hashMap);
+            }
+        }
+
+        detailMaps.add(detailMap);
+        return detailMaps;
+    }
+
     public ArrayList<ArrayList<HashMap<String, String>>> getDetailTableDataMap(RequestInfo requestInfo) {
         ArrayList<ArrayList<HashMap<String, String>>> detailMaps = new ArrayList<ArrayList<HashMap<String, String>>>();
         DetailTable[] detailTables = requestInfo.getDetailTableInfo().getDetailTable();
@@ -201,6 +251,11 @@ public class InvoiceUtil extends BaseBean {
         updateModeFormIdInfo(sourceId);
     }
 
+    /**
+     * 更新模块基本信息
+     *
+     * @param sourceId
+     */
     public void updateModeFormIdInfo(int sourceId) {
         String sql = "update uf_invoice set formmodeid='" +
                 this.getModeId() +
@@ -254,5 +309,6 @@ public class InvoiceUtil extends BaseBean {
     public void setRequestId(String requestId) {
         this.requestId = requestId;
     }
+
 
 }

@@ -27,12 +27,16 @@ public class SetApprovalAction extends BaseBean implements Action {
     private String appKey;
     private String appSecurity;
     private String approvalNumber;
+    private String tableName;
+    private String requestid;
     private Map<String, String> tableInfo;
     private ArrayList<HashMap<String, String>> detailTableDataMap1;
     private ArrayList<HashMap<String, String>> detailTableDataMap2;
     private ArrayList<HashMap<String, String>> detailTableDataMap3;
     private String fromDate;
     private String toDate;
+    private final String SEQ_EN = ",";
+    private final String SEQ_CN = "，";
 
 
     public SetApprovalAction() {
@@ -40,20 +44,22 @@ public class SetApprovalAction extends BaseBean implements Action {
         this.appSecurity = getPropValue("ctripInfo", "appSecurity");
     }
 
+    @Override
     public String execute(RequestInfo requestInfo) {
         writeLog("==================================进入提前审批类==================================");
         CorpTicket getCorpTicket = new CorpTicket();
-        String requestid = requestInfo.getRequestid();// 审批单行程号
+        // 审批单行程号
+        this.requestid = requestInfo.getRequestid();
 
         String workflowid = requestInfo.getWorkflowid();
-        String tableName = getTableNameByWorkflowId(workflowid);
-        String mainidSql = "(select id from " + tableName + " where requestid="
-                + requestid + ")";
+        this.tableName = getTableNameByWorkflowId(workflowid);
+        String mainidSql = "(select id from " + this.tableName + " where requestid="
+                + this.requestid + ")";
         Property[] mainProperty = requestInfo.getMainTableInfo().getProperty();
-
-        this.tableInfo = getMainTableInfo(mainProperty);// 主表信息
-
-        this.approvalNumber = tableInfo.get("djbh");// 设置行程号
+        // 主表信息
+        this.tableInfo = getMainTableInfo(mainProperty);
+        // 设置行程号
+        this.approvalNumber = tableInfo.get("djbh");
 
         this.fromDate = this.tableInfo.get("ccksrq");
         this.toDate = this.tableInfo.get("ccjsrq");
@@ -63,26 +69,26 @@ public class SetApprovalAction extends BaseBean implements Action {
          * 明细1 航班信息
          *
          * ccry 出差人员 ccrs 出差人数 ydlx 预定类型 cfrq 出发日期 fcrq 返程日期 cfcs 出发城市 ddcs 到达城市
-         * cw 舱位 price 价格 hblx 航班类型 bz 备注
+         * cw 舱位 price 价格 hblx 航班类型 bz 备注 ywmc 英文名称
          *
          */
-        String sqlDetail1 = "select ccry,ccrs,ydlx,cfrq,fcrq,cfcs,ddcs,cw,price,hblx,bz from "
-                + tableName + "_dt1 where mainid =" + mainidSql;
+        String sqlDetail1 = "select ccry,ccrs,ydlx,cfrq,fcrq,cfcs,ddcs,cw,price,hblx,bz,ywmc，wbccry from "
+                + this.tableName + "_dt1 where mainid =" + mainidSql;
         this.detailTableDataMap1 = getDetailTableDataMap(sqlDetail1);
 
         /**
          * 明细2 酒店 rzr 入住人 rzrs 入住人数 ydlx 预定类型 rzrq 入住日期 ldrq 离店日期 rzcs 入住城市
-         * price 价格 fjsl 房间数量 jdxj 酒店星级 bz 备注
+         * price 价格 fjsl 房间数量 jdxj 酒店星级 bz 备注 ywmc 英文名称
          */
-        String sqlDetail2 = "select rzr,rzrs,ydlx,rzrq,ldrq,rzcs,price,fjsl,jdxj,bz from "
-                + tableName + "_dt2 where mainid = " + mainidSql;
+        String sqlDetail2 = "select rzr,rzrs,ydlx,rzrq,ldrq,rzcs,price,fjsl,jdxj,bz,ywmc，wbrzry from "
+                + this.tableName + "_dt2 where mainid = " + mainidSql;
         this.detailTableDataMap2 = getDetailTableDataMap(sqlDetail2);
 
         /**
          * 明细3火车 ccry 出差人员 ccrs 出差人数 ydlx 预定类型 cfrq 出发日期 cfcs 出发城市 ddcs 到达城市
          * zxlx 坐席类型 price 价格 xclx 行程类型 bz 备注
          */
-        String sqlDetail3 = "select * from " + tableName
+        String sqlDetail3 = "select * from " + this.tableName
                 + "_dt3 where mainid = " + mainidSql;
         this.detailTableDataMap3 = getDetailTableDataMap(sqlDetail3);
 
@@ -91,23 +97,48 @@ public class SetApprovalAction extends BaseBean implements Action {
         SetApprovalServiceRequest requestSetApp = getRequestSetApp(
                 this.detailTableDataMap1, this.detailTableDataMap2,
                 this.detailTableDataMap3, ticket);
-        setApproval(requestSetApp);
+        SetApprovalResponse setApprovalResponse = setApproval(requestSetApp);
 
+        if (!setApprovalResponse.getStatus().getSuccess()) {
+            requestInfo.getRequestManager().setMessageid(this.requestid);
+            int errorCode = setApprovalResponse.getStatus().getErrorCode();
+            String message = setApprovalResponse.getStatus().getMessage();
+            requestInfo.getRequestManager().setMessagecontent("提交失败,errorcode:" + errorCode + ",message:" + message + ",请退回申请人修改信息,或者联系OA负责人处理!");
+        }
         writeLog("==================================结束提前审批类==================================");
         return Action.SUCCESS;
     }
 
-    // 航班,酒店,火车提前审批提交接口
-    public void setApproval(SetApprovalServiceRequest setApprovalServiceRequest) {
+    /**
+     * 航班,酒店,火车提前审批提交接口
+     *
+     * @param setApprovalServiceRequest
+     */
+    public SetApprovalResponse setApproval(SetApprovalServiceRequest setApprovalServiceRequest) {
         SetApprovalService setapprovalService = new SetApprovalService();
-        SetApprovalResponse setApprovalResponse = setapprovalService
-                .SetApproval(setApprovalServiceRequest);
+        SetApprovalResponse setApprovalResponse = setapprovalService.SetApproval(setApprovalServiceRequest);
         if (setApprovalResponse != null
                 && setApprovalResponse.getStatus() != null) {
+            boolean result = setApprovalResponse.getStatus().getSuccess();
+            if (result) {
+                setApprovalResult();//更新审批单落地状态
+            }
             writeLog("service result:" + JSON.toJSONString(setApprovalResponse),
                     SetApprovalAction.class);
         }
+        return setApprovalResponse;
+    }
 
+    /**
+     * 更新审批单落地状态
+     * 0 success
+     * 1 fail
+     */
+    private void setApprovalResult() {
+        String sql = "update " + this.tableName + " set result='0' where requestid=" + this.requestid;
+        writeLog("update result sql:" + sql, SetApprovalAction.class);
+        RecordSet rs = new RecordSet();
+        rs.execute(sql);
     }
 
     /**
@@ -127,6 +158,27 @@ public class SetApprovalAction extends BaseBean implements Action {
     }
 
     /**
+     * 根据字符串返回list
+     *
+     * @param hrmStr
+     * @return
+     */
+    public List<String> getHrmResourceListByString(String hrmStr) {
+        //处理为空情况
+        if ("".equals(hrmStr) || hrmStr == null) {
+            return null;
+        }
+        List<String> hrmList = new ArrayList<String>();
+        hrmStr = hrmStr.replace("，", ",");
+        String[] split = hrmStr.split(",");
+        for (String name : split) {
+            hrmList.add(name);
+        }
+        return hrmList;
+
+    }
+
+    /**
      * 取得请求参数信息
      *
      * @param detailTableDataMap1
@@ -140,74 +192,111 @@ public class SetApprovalAction extends BaseBean implements Action {
 
         SetApprovalServiceRequest setApprovalServiceRequest = new SetApprovalServiceRequest();
         SetApprovalRequest setApprovalRequest = new SetApprovalRequest();
-        Authentification Authentification = new Authentification(this.appKey, ticket);
-
-        setApprovalRequest.setAuth(Authentification);// 认证信息
-        setApprovalRequest.setStatus(1);// 设置提前审批单状态
-        setApprovalRequest.setApprovalNumber(this.approvalNumber);// approvalNumber
-        // 目前先按照主表的申请人设置员工id
-        setApprovalRequest.setEmployeeID(this.tableInfo.get("gh"));// 员工编号
-        setApprovalRequest.setExpiredTime("");// 过期时间
+        Authentification authentification = new Authentification(this.appKey, ticket);
+        // 认证信息
+        setApprovalRequest.setAuth(authentification);
+        // 设置提前审批单状态
+        setApprovalRequest.setStatus(1);
+        // approvalNumber
+        setApprovalRequest.setApprovalNumber(this.approvalNumber);
+        // 过期时间
+        setApprovalRequest.setExpiredTime("");
         /***扩展字段  成本中心  start****/
         ArrayList<ExtendField> xtendFieldList = new ArrayList<ExtendField>();
         ExtendField extendField = new ExtendField();
-
-        extendField.setFieldName("CostCenter1");//成本中心1
+        //成本中心1
+        extendField.setFieldName("CostCenter1");
         String sqbm = this.tableInfo.get("sqbm");
         String departmentName = getDepartmentName(sqbm);
-
-        extendField.setFieldValue(departmentName);//费用结算部门
+        //费用结算部门
+        extendField.setFieldValue(departmentName);
         xtendFieldList.add(extendField);
         setApprovalRequest.setExtendFieldList(xtendFieldList);
         /***扩展字段  成本中心  end****/
         // 设置航班start
         /**
          * 明细1 航班信息 ccry 出差人员 ccrs 出差人数 ydlx 预定类型 cfrq 出发日期 fcrq 返程日期 cfcs 出发城市
-         * ddcs 到达城市 cw 舱位 price 价格 hblx 航班类型 bz 备注
+         * ddcs 到达城市 cw 舱位 price 价格 hblx 航班类型 bz 备注 ywmc 英文名称
          */
         if (detailTableDataMap1 != null && detailTableDataMap1.size() > 0) {
             ArrayList<FlightEndorsementDetail> flightEndorsementDetails = new ArrayList<FlightEndorsementDetail>();
 
             //根据航班类型设置人员集合
-            ArrayList<String> passengerInternational = new ArrayList<String>();
-            ArrayList<String> passengerDomestic = new ArrayList<String>();
+            //所有出差人员集合
+            ArrayList<PassengerDetail> chinaAndEnNameList_CN = new ArrayList<PassengerDetail>();
+            ArrayList<PassengerDetail> chinaAndEnNameList_EN = new ArrayList<PassengerDetail>();
             //城市
             ArrayList<String> fromCityInternational = new ArrayList<String>();
             ArrayList<String> toCityInternational = new ArrayList<String>();
             ArrayList<String> fromCityDomestic = new ArrayList<String>();
             ArrayList<String> toCityDomestic = new ArrayList<String>();
-
             Integer ccrsDomestic = 0;
             Integer ccrsInternational = 0;
 
             for (int i = 0; i < detailTableDataMap1.size(); i++) {
+                //出差人员,系统内人员id,以逗号分隔
                 String ccry = detailTableDataMap1.get(i).get("ccry");
+                //出差人数
                 String ccrs = detailTableDataMap1.get(i).get("ccrs");
+                //预定类型
                 String ydlx = detailTableDataMap1.get(i).get("ydlx");
+                //出发城市
                 String cfcs = detailTableDataMap1.get(i).get("cfcs");
+                //到达城市
                 String ddcs = detailTableDataMap1.get(i).get("ddcs");
+                //英文名称
+                String ywmc = detailTableDataMap1.get(i).get("ywmc");
+                //外部人员姓名
+                String wbccry = detailTableDataMap1.get(i).get("wbccry");
+
                 if ("1".equals(ydlx)) {
-                    passengerDomestic.add(ccry);
                     ccrsDomestic += Integer.parseInt(ccrs);
                     fromCityDomestic.add(cfcs);
                     toCityDomestic.add(ddcs);
+                    if (!"".equals(ccry) && ccry != null) {
+                        ArrayList<String> tmpArr = new ArrayList<String>();
+                        tmpArr.add(ccry);
+                        chinaAndEnNameList_CN.addAll(getPassengerDetails(tmpArr));
+                    }
+                    if (!"".equals(wbccry) && wbccry != null) {
+                        chinaAndEnNameList_CN.addAll(getEnPassengerDetails(getHrmResourceListByString(wbccry)));
+                    }
+                    if (!"".equals(ywmc) && ywmc != null) {
+                        chinaAndEnNameList_CN.addAll(getEnPassengerDetails(getHrmResourceListByString(ywmc)));
+                    }
+
                 }
                 if ("2".equals(ydlx)) {
-                    passengerInternational.add(ccry);
                     ccrsInternational += Integer.parseInt(ccrs);
                     fromCityInternational.add(cfcs);
                     toCityInternational.add(ddcs);
+                    if (!"".equals(ccry) && ccry != null) {
+                        ArrayList<String> tmpArr = new ArrayList<String>();
+                        tmpArr.add(ccry);
+                        chinaAndEnNameList_EN.addAll(getPassengerDetails(tmpArr));
+                    }
+                    if (!"".equals(wbccry) && wbccry != null) {
+                        chinaAndEnNameList_EN.addAll(getEnPassengerDetails(getHrmResourceListByString(wbccry)));
+                    }
+                    if (!"".equals(ywmc) && ywmc != null) {
+                        chinaAndEnNameList_EN.addAll(getEnPassengerDetails(getHrmResourceListByString(ywmc)));
+                    }
                 }
             }
 
+            chinaAndEnNameList_CN = new ArrayList<PassengerDetail>(new LinkedHashSet<PassengerDetail>(chinaAndEnNameList_CN));
+            chinaAndEnNameList_EN = new ArrayList<PassengerDetail>(new LinkedHashSet<PassengerDetail>(chinaAndEnNameList_EN));
+
             //国内
-            if (passengerDomestic != null && !passengerDomestic.isEmpty()) {
+            if (chinaAndEnNameList_CN != null && !chinaAndEnNameList_CN.isEmpty()) {
                 FlightEndorsementDetail fightEndorsementDetailDomestic = new FlightEndorsementDetail();
                 fightEndorsementDetailDomestic.setFlightWay(FlightWayType.RoundTrip);
                 fightEndorsementDetailDomestic.setProductType(ProductType.DomesticFlight);
-                fightEndorsementDetailDomestic.setPassengerList(getPassengerDetails(passengerDomestic));
-                fightEndorsementDetailDomestic.setFromCities((ArrayList<String>) getFlightCityList(fromCityDomestic));//需要转换中文城市列表
-                fightEndorsementDetailDomestic.setToCities((ArrayList<String>) getFlightCityList(toCityDomestic));//需要转换中文城市列表
+                fightEndorsementDetailDomestic.setPassengerList(chinaAndEnNameList_CN);
+                //需要转换中文城市列表
+                fightEndorsementDetailDomestic.setFromCities((ArrayList<String>) getFlightCityList(fromCityDomestic));
+                //需要转换中文城市列表
+                fightEndorsementDetailDomestic.setToCities((ArrayList<String>) getFlightCityList(toCityDomestic));
                 fightEndorsementDetailDomestic.setDepartDateBegin(this.fromDate);
                 fightEndorsementDetailDomestic.setDepartDateEnd(this.toDate);
                 fightEndorsementDetailDomestic.setReturnDateBegin(this.fromDate);
@@ -217,13 +306,16 @@ public class SetApprovalAction extends BaseBean implements Action {
                 flightEndorsementDetails.add(fightEndorsementDetailDomestic);
             }
             //国际
-            if (passengerInternational != null && !passengerInternational.isEmpty()) {
+            if (chinaAndEnNameList_EN != null && !chinaAndEnNameList_EN.isEmpty()) {
                 FlightEndorsementDetail fightEndorsementDetailInternational = new FlightEndorsementDetail();
                 fightEndorsementDetailInternational.setFlightWay(FlightWayType.RoundTrip);
                 fightEndorsementDetailInternational.setProductType(ProductType.InternationalFlight);
-                fightEndorsementDetailInternational.setPassengerList(getPassengerDetails(passengerInternational));
-                fightEndorsementDetailInternational.setFromCities((ArrayList<String>) getFlightCityList(fromCityInternational));//需要转换中文城市列表
-                fightEndorsementDetailInternational.setToCities((ArrayList<String>) getFlightCityList(toCityInternational));//需要转换中文城市列表
+                //英文名称列表
+                fightEndorsementDetailInternational.setPassengerList(chinaAndEnNameList_EN);
+                //需要转换中文城市列表
+                fightEndorsementDetailInternational.setFromCities((ArrayList<String>) getFlightCityList(fromCityInternational));
+                //需要转换中文城市列表
+                fightEndorsementDetailInternational.setToCities((ArrayList<String>) getFlightCityList(toCityInternational));
                 fightEndorsementDetailInternational.setDepartDateBegin(this.fromDate);
                 fightEndorsementDetailInternational.setDepartDateEnd(this.toDate);
                 fightEndorsementDetailInternational.setReturnDateBegin(this.fromDate);
@@ -241,8 +333,10 @@ public class SetApprovalAction extends BaseBean implements Action {
             ArrayList<HotelEndorsementDetail> hotelEndorsementDetails = new ArrayList<HotelEndorsementDetail>();
 
             //根据航班类型设置人员集合
-            ArrayList<String> passengerInternational = new ArrayList<String>();
-            ArrayList<String> passengerDomestic = new ArrayList<String>();
+
+            ArrayList<PassengerDetail> chinaAndEnNameList_CN = new ArrayList<PassengerDetail>();
+            ArrayList<PassengerDetail> chinaAndEnNameList_EN = new ArrayList<PassengerDetail>();
+
 
             //城市
             ArrayList<String> toCityInternational = new ArrayList<String>();
@@ -258,23 +352,49 @@ public class SetApprovalAction extends BaseBean implements Action {
                 String ydlx = detailTableDataMap2.get(i).get("ydlx");
                 String rzcs = detailTableDataMap2.get(i).get("rzcs");
                 String fjsl = detailTableDataMap2.get(i).get("fjsl");
-
-                if ("3".equals(ydlx)) {// 国内酒店
-                    passengerDomestic.add(ccry);
+                String ywmc = detailTableDataMap2.get(i).get("ywmc");
+                String wbrzry = detailTableDataMap2.get(i).get("wbrzry");
+                // 国内酒店
+                if ("3".equals(ydlx)) {
                     toCityDomestic.add(rzcs);
                     fjslDomestic += Integer.parseInt(fjsl);
+                    if (!"".equals(ccry) && ccry != null) {
+                        ArrayList<String> tmpArr = new ArrayList<String>();
+                        tmpArr.add(ccry);
+                        chinaAndEnNameList_CN.addAll(getPassengerDetails(tmpArr));
+                    }
+                    if (!"".equals(wbrzry) && wbrzry != null) {
+                        chinaAndEnNameList_CN.addAll(getEnPassengerDetails(getHrmResourceListByString(wbrzry)));
+                    }
+                    if (!"".equals(ywmc) && ywmc != null) {
+                        chinaAndEnNameList_CN.addAll(getEnPassengerDetails(getHrmResourceListByString(ywmc)));
+                    }
                 }
-                if ("4".equals(ydlx)) {// 海外酒店
-                    passengerInternational.add(ccry);
+                // 海外酒店
+                if ("4".equals(ydlx)) {
                     toCityInternational.add(rzcs);
                     fjslInternational += Integer.parseInt(fjsl);
+                    if (!"".equals(ccry) && ccry != null) {
+                        ArrayList<String> tmpArr = new ArrayList<String>();
+                        tmpArr.add(ccry);
+                        chinaAndEnNameList_EN.addAll(getPassengerDetails(tmpArr));
+                    }
+                    if (!"".equals(wbrzry) && wbrzry != null) {
+                        chinaAndEnNameList_EN.addAll(getEnPassengerDetails(getHrmResourceListByString(wbrzry)));
+                    }
+                    if (!"".equals(ywmc) && ywmc != null) {
+                        chinaAndEnNameList_EN.addAll(getEnPassengerDetails(getHrmResourceListByString(ywmc)));
+                    }
                 }
+
             }
+            chinaAndEnNameList_CN = new ArrayList<PassengerDetail>(new LinkedHashSet<PassengerDetail>(chinaAndEnNameList_CN));
+            chinaAndEnNameList_EN = new ArrayList<PassengerDetail>(new LinkedHashSet<PassengerDetail>(chinaAndEnNameList_EN));
             //国内
-            if (passengerDomestic != null && !passengerDomestic.isEmpty()) {
+            if (chinaAndEnNameList_CN != null && !chinaAndEnNameList_CN.isEmpty()) {
                 HotelEndorsementDetail hotelEndorsementDetailDomestic = new HotelEndorsementDetail();
                 hotelEndorsementDetailDomestic.setProductType(HotelProductType.Domestic);
-                hotelEndorsementDetailDomestic.setPassengerList(getPassengerDetails(passengerDomestic));
+                hotelEndorsementDetailDomestic.setPassengerList(chinaAndEnNameList_CN);
                 hotelEndorsementDetailDomestic.setRoomCount(fjslDomestic);
                 hotelEndorsementDetailDomestic.setCheckInDateBegin(this.fromDate);
                 hotelEndorsementDetailDomestic.setCheckInDateEnd(this.toDate);
@@ -286,10 +406,10 @@ public class SetApprovalAction extends BaseBean implements Action {
                 hotelEndorsementDetails.add(hotelEndorsementDetailDomestic);
             }
             //国外
-            if (passengerInternational != null && !passengerInternational.isEmpty()) {
+            if (chinaAndEnNameList_EN != null && !chinaAndEnNameList_EN.isEmpty()) {
                 HotelEndorsementDetail hotelEndorsementDetailInternational = new HotelEndorsementDetail();
                 hotelEndorsementDetailInternational.setProductType(HotelProductType.International);
-                hotelEndorsementDetailInternational.setPassengerList(getPassengerDetails(passengerInternational));
+                hotelEndorsementDetailInternational.setPassengerList(chinaAndEnNameList_EN);
                 hotelEndorsementDetailInternational.setRoomCount(fjslInternational);
                 hotelEndorsementDetailInternational.setCheckInDateBegin(this.fromDate);
                 hotelEndorsementDetailInternational.setCheckInDateEnd(this.toDate);
@@ -315,23 +435,43 @@ public class SetApprovalAction extends BaseBean implements Action {
             ArrayList<String> fromCities = new ArrayList<String>();
             ArrayList<String> toCities = new ArrayList<String>();
             ArrayList<String> passengerList = new ArrayList<String>();
+
+            ArrayList<String> wbccryList = new ArrayList<String>();
+            //所有出差人员集合
+            ArrayList<PassengerDetail> chinaAndEnNameList = new ArrayList<PassengerDetail>();
+
+
             Integer ccrss = 0;
             for (int i = 0; i < detailTableDataMap3.size(); i++) {
                 String ccry = detailTableDataMap3.get(i).get("ccry");
                 String ccrs = detailTableDataMap3.get(i).get("ccrs");
                 String cfcs = detailTableDataMap3.get(i).get("cfcs");
                 String ddcs = detailTableDataMap3.get(i).get("ddcs");
+                String wbccry = detailTableDataMap3.get(i).get("wbccry");
+                if (!"".equals(wbccry)) {
+                    wbccryList.addAll(getHrmResourceListByString(wbccry));
+                }
+                if (!"".equals(ccry) && ccry != null) {
+                    passengerList.add(ccry);
+                }
                 ccrss += Integer.parseInt(ccrs);
                 fromCities.add(cfcs);
                 toCities.add(ddcs);
-                passengerList.add(ccry);
+
             }
+
+            chinaAndEnNameList.addAll(getPassengerDetails(passengerList));
+            chinaAndEnNameList.addAll(getEnPassengerDetails(wbccryList));
+            chinaAndEnNameList = new ArrayList<PassengerDetail>(new LinkedHashSet<PassengerDetail>(chinaAndEnNameList));
+
             TrainEndorsementDetail trainEndorsementDetail = new TrainEndorsementDetail();
-            trainEndorsementDetail.setProductType(TrainProductType.Domestic);// 默认国内
-            trainEndorsementDetail.setTripType(TripTypeEnum.SingleWay);// 目前火车票只有单程
+            // 默认国内
+            trainEndorsementDetail.setProductType(TrainProductType.Domestic);
+            // 目前火车票只有单程
+            trainEndorsementDetail.setTripType(TripTypeEnum.SingleWay);
             trainEndorsementDetail.setDepartDateBegin(this.fromDate);
             trainEndorsementDetail.setDepartDateEnd(this.toDate);
-            trainEndorsementDetail.setPassengerList(getPassengerDetails(passengerList));
+            trainEndorsementDetail.setPassengerList(chinaAndEnNameList);
             trainEndorsementDetail.setFromCities((ArrayList<String>) removeDuplicate(fromCities));
             trainEndorsementDetail.setToCities((ArrayList<String>) removeDuplicate(toCities));
             trainEndorsementDetail.setCurrency(CurrencyType.CNY);
@@ -342,7 +482,8 @@ public class SetApprovalAction extends BaseBean implements Action {
         }
 
         // 设置火车的参数信息end
-
+        //设置员工编号
+        setApprovalRequest.setEmployeeID(this.tableInfo.get("gh"));
         setApprovalServiceRequest.setRequest(setApprovalRequest);
 
         writeLog("setApprovalRequest=================" + JSON.toJSONString(setApprovalServiceRequest));
@@ -350,32 +491,32 @@ public class SetApprovalAction extends BaseBean implements Action {
     }
 
     /**
-     * 判断舱等类型
+     * 返回人员列表
      *
-     * @param cw
+     * @param passengerList
      * @return
      */
-    public SeatClassType getCw(String cw) {
-        if (cw != null && "1".equals(cw)) {
-            return SeatClassType.UnKnow;// 未知
+    public ArrayList<PassengerDetail> getPassengerDetails(List<String> passengerList) {
+        if (passengerList == null) {
+            return null;
         }
-        if (cw != null && "2".equals(cw)) {
-            return SeatClassType.SaloonCabin; // 头等舱
+        passengerList = removeDuplicate(passengerList);
+        ArrayList<PassengerDetail> passengerDetails = new ArrayList<PassengerDetail>();
+        for (String name : passengerList) {
+            PassengerDetail passengerDetail = new PassengerDetail();
+            passengerDetail.setName(getLastNameList(name));
+            passengerDetails.add(passengerDetail);
         }
-        if (cw != null && "3".equals(cw)) {
-            return SeatClassType.BusinessClass;// 公务舱
-        }
-        if (cw != null && "4".equals(cw)) {
-            return SeatClassType.SuperTouristClass;// 超级经济舱
-        }
-        if (cw != null && "5".equals(cw)) {
-            return SeatClassType.TouristClass;// 经济舱
-        }
-        return null;
+        return passengerDetails;
     }
 
-
-    public ArrayList<PassengerDetail> getPassengerDetails(List<String> passengerList) {
+    /**
+     * 国外 英文名集合
+     *
+     * @param passengerList
+     * @return
+     */
+    public ArrayList<PassengerDetail> getEnPassengerDetails(List<String> passengerList) {
         if (passengerList == null) {
             return null;
         }
@@ -384,11 +525,10 @@ public class SetApprovalAction extends BaseBean implements Action {
         StringBuffer sb = new StringBuffer();
         for (String name : passengerList) {
             PassengerDetail passengerDetail = new PassengerDetail();
-            passengerDetail.setName(getLastNameList(name));
+            passengerDetail.setName(name);
             sb.append(passengerDetail.getName()).append(",");
             passengerDetails.add(passengerDetail);
         }
-        writeLog("==========================" + sb.toString());
         return passengerDetails;
     }
 
@@ -400,14 +540,16 @@ public class SetApprovalAction extends BaseBean implements Action {
      */
     public String getLastNameList(String ids) {
         StringBuilder sb = new StringBuilder();
-        String sql = "select lastname from hrmresource where id in(" + ids
-                + ")";
+        // String sql = "select lastname from hrmresource where id in(" + ids + ")";
+        //从携程人员同步表中获取正确的人名
+        String sql = "select lastname from ctriphrm where workcode in (select workcode from hrmresource where id in(" + ids + "))";
+
         RecordSet rs = new RecordSet();
         rs.execute(sql);
         while (rs.next()) {
             sb.append(rs.getString(1)).append(",");
         }
-        if (sb.toString().contains(",")) {
+        if (sb.toString().contains(SEQ_EN)) {
             return sb.toString().substring(0, sb.toString().length() - 1);
         }
         return null;
@@ -615,7 +757,6 @@ public class SetApprovalAction extends BaseBean implements Action {
                 sbf.append(list.get(i));
             }
         }
-        writeLog("===========" + sbf.toString());
         return sbf.toString();
     }
 }

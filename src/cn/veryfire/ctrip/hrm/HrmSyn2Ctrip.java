@@ -25,7 +25,7 @@ public class HrmSyn2Ctrip extends BaseBean {
     private String appSecurity;
     private String version;
     private String corporationID;
-    private String subAccountName;
+    private String subAccountName = "KNHB_提前审批授权";
 
     public HrmSyn2Ctrip() {
         this.appKey = getPropValue("ctripInfo", "appKey");
@@ -33,15 +33,21 @@ public class HrmSyn2Ctrip extends BaseBean {
         this.version = getPropValue("ctripInfo", "version");
         this.corporationID = getPropValue("ctripInfo", "corporationID");
         this.ticket = this.getCorpTicket.getEmployeeSyncTicket(this.appKey, this.appSecurity, this.version).getTicket();
-        this.subAccountName = getPropValue("ctripInfo", "SubAccountName");
+        //this.subAccountName = getPropValue("ctripInfo", "SubAccountName");
         writeLog("crtip params----->:appKey:" + appKey + ",appSecurity:" + appSecurity + ",version:" + version + ",corporationID:" + corporationID + ",subAccountName:" + this.subAccountName);
     }
 
-    // 判断员工是否在携程中开卡
-    public boolean isOpenCard(String Ticket, String EmployeeID) {
+    /**
+     * // 判断员工是否在携程中开卡
+     *
+     * @param ticket
+     * @param tmployeeID
+     * @return
+     */
+    public boolean isOpenCard(String ticket, String tmployeeID) {
         boolean flag = false;
-        String param = "{\"Ticket\":\"" + Ticket + "\",\"CorpID\":\"" + this.corporationID
-                + "\",\"EmployeeID\":\"" + EmployeeID + "\"}";
+        String param = "{\"Ticket\":\"" + ticket + "\",\"CorpID\":\"" + this.corporationID
+                + "\",\"EmployeeID\":\"" + tmployeeID + "\"}";
         String url = "https://ct.ctrip.com/corpservice/OpenCard/IsOpenedCard?type=json";
         String postData = HttpUtil.PostData(url, param);
         JSONObject json = (JSONObject) JSON.parse(postData);
@@ -49,8 +55,14 @@ public class HrmSyn2Ctrip extends BaseBean {
         return flag;
     }
 
-    // 获取OA系统中的人员信息,构造批量更新的实体类
-    // 构造批量更新实体
+    /**
+     * // 获取OA系统中的人员信息,构造批量更新的实体类
+     * // 构造批量更新实体
+     *
+     * @param ticket
+     * @param isSendConfirm
+     * @return
+     */
     protected AuthenticationListRequst buildAuthenticationListRequst(String ticket, boolean isSendConfirm) {
         AuthenticationListRequst authenticationListRequst = new AuthenticationListRequst();
         authenticationListRequst.setTicket(ticket);
@@ -120,15 +132,18 @@ public class HrmSyn2Ctrip extends BaseBean {
         /**
          * 第一次先构造构造没有授权人的实体，传入过去，第一次构造有授权人的信息用来更新数据
          */
-        AuthenticationListRequst authenticationListRequstNoConfirm = buildAuthenticationListRequst(this.ticket, false);//没有授权人
-        AuthenticationListRequst authenticationListRequstAndConfirm = buildAuthenticationListRequst(this.ticket, true);//有授权人
+        //没有授权人
+        AuthenticationListRequst authenticationListRequstNoConfirm = buildAuthenticationListRequst(this.ticket, false);
+        //有授权人
+        AuthenticationListRequst authenticationListRequstAndConfirm = buildAuthenticationListRequst(this.ticket, true);
 
         AuthenticationInfoListResponse authenticationInfoListResponseNoConfirm = empoyeeSyncService.MultipleEmployeeSync(authenticationListRequstNoConfirm);
         if (authenticationInfoListResponseNoConfirm != null) {
             String result = authenticationInfoListResponseNoConfirm.getResult();
             if (result.equals("Failed")) {
                 writeLog("synHrmResource no base result :" + JSON.toJSONString(authenticationInfoListResponseNoConfirm), HrmSyn2Ctrip.class);
-                return;//如果传入基本信息出错，直接返回，不在继续传入授权相关信息
+                //如果传入基本信息出错，直接返回，不在继续传入授权相关信息
+                return;
             }
         }
         AuthenticationInfoListResponse authenticationInfoListResponseAndConfirm = empoyeeSyncService.MultipleEmployeeSync(authenticationListRequstAndConfirm);
@@ -149,9 +164,10 @@ public class HrmSyn2Ctrip extends BaseBean {
      */
     public void synHrmresource2Ctrip(Authentication authencationEntity) {
         AuthenticationListRequst authenticationListRequst = new AuthenticationListRequst();
-        authenticationListRequst.setAppkey(this.appKey);//this.appKey
-        authenticationListRequst.setTicket(this.ticket);//
-        authenticationListRequst.setCorporationID(this.corporationID);//
+        //this.appKey
+        authenticationListRequst.setAppkey("obk_test");
+        authenticationListRequst.setTicket(new CorpTicket().getEmployeeSyncTicket("obk_test", "obk_test", "1.0").getTicket());
+        authenticationListRequst.setCorporationID("obk_test");
 
         List<AuthenticationInfoList> authenticationInfoLists = new ArrayList<AuthenticationInfoList>();
 
@@ -178,6 +194,12 @@ public class HrmSyn2Ctrip extends BaseBean {
         }
     }
 
+    public ArrayList<HashMap<String, String>> synHrm2CrtipByWorkCodeIds(String workcodes) {
+        ArrayList<HashMap<String, String>> synList;
+        synHrm2CrtipByWorkCodeIds(workcodes, false);
+        synList = synHrm2CrtipByWorkCodeIds(workcodes, true);
+        return synList;
+    }
 
     /**
      * 根据工号更新人员到携程
@@ -185,7 +207,7 @@ public class HrmSyn2Ctrip extends BaseBean {
      * @param workcodes
      * @return
      */
-    public ArrayList<HashMap<String, String>> synHrm2CrtipByWorkCodeIds(String workcodes, boolean isSendConfirm) {
+    protected ArrayList<HashMap<String, String>> synHrm2CrtipByWorkCodeIds(String workcodes, boolean isSendConfirm) {
         writeLog("workcodes===========" + workcodes);
         if ("".equals(workcodes)) {
             return null;
@@ -245,6 +267,7 @@ public class HrmSyn2Ctrip extends BaseBean {
             hashMap.put("dept2", dept2);
             hashMap.put("subaccountname", subaccountname);
             hashMap.put("manageremail", manageremail);
+
             synList.add(hashMap);
             AuthenticationInfoList authenticationInfo = new AuthenticationInfoList();
             Authentication authencationEntity = new Authentication();
@@ -255,7 +278,9 @@ public class HrmSyn2Ctrip extends BaseBean {
             authencationEntity.setDept2(subaccountname);//开票公司
             authencationEntity.setRankName(levels);//职级
             authencationEntity.setEmail(email);//邮箱
-
+            if (isSendConfirm && !"".equals(manageremail)) {
+                authencationEntity.setConfirmPersonList(getConfirmPersonList(manageremail));
+            }
             authencationEntity.setSubAccountName(this.subAccountName);//子账户
             authencationEntity.setIsSendEMail(true);//是否发送邮件
             authenticationInfo.setAuthentication(authencationEntity);

@@ -74,7 +74,7 @@ public class CorpTicket extends BaseBean {
 	 * 获取提前审批的ticket
 	 * https://ct.ctrip.com/switchapi/approval.svc/rest/setapproval
 	 * 
-	 * @param url请求的url
+	 * @param url
 	 * @param appKey
 	 * @param appSecurity
 	 * @return 返回ticket

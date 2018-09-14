@@ -19,6 +19,7 @@ public class CustomJavaCode_20180705165338 extends AbstractModeExpandJavaCode {
      * @param param param包含(但不限于)以下数据
      *              user 当前用户
      */
+    @Override
     public void doModeExpand(Map<String, Object> param) throws Exception {
         User user = (User) param.get("user");
         String billid = "";//数据id
