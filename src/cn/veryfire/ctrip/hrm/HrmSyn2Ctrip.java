@@ -271,18 +271,27 @@ public class HrmSyn2Ctrip extends BaseBean {
             synList.add(hashMap);
             AuthenticationInfoList authenticationInfo = new AuthenticationInfoList();
             Authentication authencationEntity = new Authentication();
-            authencationEntity.setValid(status);//状态
-            authencationEntity.setEmployeeID(workcode);//员工编号
-            authencationEntity.setName(lastname);//员工姓名
-            authencationEntity.setDept1(dept2);//部门
-            authencationEntity.setDept2(subaccountname);//开票公司
-            authencationEntity.setRankName(levels);//职级
-            authencationEntity.setEmail(email);//邮箱
+            //状态
+            authencationEntity.setValid(status);
+            //员工编号
+            authencationEntity.setEmployeeID(workcode);
+            //员工姓名
+            authencationEntity.setName(lastname);
+            //部门
+            authencationEntity.setDept1(dept2);
+            //开票公司
+            authencationEntity.setDept2(subaccountname);
+            //职级
+            authencationEntity.setRankName(levels);
+            //邮箱
+            authencationEntity.setEmail(email);
             if (isSendConfirm && !"".equals(manageremail)) {
                 authencationEntity.setConfirmPersonList(getConfirmPersonList(manageremail));
             }
-            authencationEntity.setSubAccountName(this.subAccountName);//子账户
-            authencationEntity.setIsSendEMail(true);//是否发送邮件
+            //子账户
+            authencationEntity.setSubAccountName(this.subAccountName);
+            //是否发送邮件
+            authencationEntity.setIsSendEMail(true);
             authenticationInfo.setAuthentication(authencationEntity);
             authenticationInfo.setSequence(workcode);
             authenticationInfoLists.add(authenticationInfo);
